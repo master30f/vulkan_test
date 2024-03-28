@@ -619,7 +619,9 @@ int main(void)
         colorBlending.attachmentCount                      = 1;
         colorBlending.pAttachments                         = &colorBlendAtt;
 
-
+        VkGraphicsPipelineCreateInfo createInfo            = { 0 };
+        createInfo.sType                                   = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        
 
         vkDestroyShaderModule(device, vertexShader, NULL);
         vkDestroyShaderModule(device, fragmentShader, NULL);
