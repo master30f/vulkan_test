@@ -827,42 +827,7 @@ static inline void allocateCommandBuffers(void)
 }
 
 
-static inline void createTextureImage(void)
-{
-    int width, height, channels;
-
-    stbi_uc *pixels = stbi_load("./assets/texture.jpg", &width, &height, &channels, STBI_rgb_alpha);
-    VkDeviceSize size = width * height * 4;
-
-    VkBuffer       stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
-    createBuffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &stagingBuffer, &stagingBufferMemory);
-
-    void *data;
-    vkMapMemory(device, stagingBufferMemory, 0, size, 0, &data);
-    memcpy(data, pixels, size);
-    vkUnmapMemory(device, stagingBufferMemory);
-
-    stbi_image_free(pixels);
-
-    VkImageCreateInfo createInfo = { 0 };
-    createInfo.sType             = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    createInfo.imageType         = VK_IMAGE_TYPE_2D;
-    createInfo.extent.width      = width;
-    createInfo.extent.height     = height;
-    createInfo.extent.depth      = 1;
-    createInfo.mipLevels         = 1;
-    createInfo.arrayLayers       = 1;
-    createInfo.format            = VK_FORMAT_R8G8B8A8_SRGB;
-    createInfo.tiling            = VK_IMAGE_TILING_OPTIMAL;
-    createInfo.initialLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
-    createInfo.usage             = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-    createInfo.sharingMode       = VK_SHARING_MODE_EXCLUSIVE;
-    createInfo.samples           = VK_SAMPLE_COUNT_1_BIT;
-}
-
-
-static inline uint32_t findMemoryTypeIndex(uint32_t typeFilter, VkMemoryPropertyFlags propertyFlags)
+static uint32_t findMemoryTypeIndex(uint32_t typeFilter, VkMemoryPropertyFlags propertyFlags)
 {
     VkPhysicalDeviceMemoryProperties memoryProperties;
     vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
@@ -900,6 +865,62 @@ static void createBuffer(VkDeviceSize size, VkBufferUsageFlags usageFlags, VkMem
 
     INFO("created buffer (%lld B)\n", size);
 }
+
+static void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage *image, VkDeviceMemory *memory)
+{
+    VkImageCreateInfo createInfo = { 0 };
+    createInfo.sType             = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    createInfo.imageType         = VK_IMAGE_TYPE_2D;
+    createInfo.extent.width      = width;
+    createInfo.extent.height     = height;
+    createInfo.extent.depth      = 1;
+    createInfo.mipLevels         = 1;
+    createInfo.arrayLayers       = 1;
+    createInfo.format            = format;
+    createInfo.tiling            = tiling;
+    createInfo.initialLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
+    createInfo.usage             = usage;
+    createInfo.sharingMode       = VK_SHARING_MODE_EXCLUSIVE;
+    createInfo.samples           = VK_SAMPLE_COUNT_1_BIT;
+
+    VK_TRY(vkCreateImage(device, &createInfo, NULL, &textureImage), FATAL("could not create image: %s\n", string_VkResult(result)));
+
+    VkMemoryRequirements memoryRequirements;
+    vkGetImageMemoryRequirements(device, textureImage, &memoryRequirements);
+
+    VkMemoryAllocateInfo allocInfo = { 0 };
+    allocInfo.sType                = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize       = memoryRequirements.size;
+    allocInfo.memoryTypeIndex      = findMemoryTypeIndex(memoryRequirements.memoryTypeBits, properties);
+
+    VK_TRY(vkAllocateMemory(device, &allocInfo, NULL, memory), FATAL("could not allocate image memory: %s\n", string_VkResult(result)));
+
+    vkBindImageMemory(device, *image, *memory, 0);
+}
+
+static inline void createTextureImage(void)
+{
+    int width, height, channels;
+
+    stbi_uc *pixels = stbi_load("./assets/texture.jpg", &width, &height, &channels, STBI_rgb_alpha);
+    if (!pixels) FATAL("could not load texture image\n");
+
+    VkDeviceSize size = width * height * 4;
+
+    VkBuffer       stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    createBuffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &stagingBuffer, &stagingBufferMemory);
+
+    void *data;
+    vkMapMemory(device, stagingBufferMemory, 0, size, 0, &data);
+    memcpy(data, pixels, size);
+    vkUnmapMemory(device, stagingBufferMemory);
+
+    stbi_image_free(pixels);
+
+    createImage(width, height, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &textureImage, &textureImageMemory);
+}
+
 
 static void copyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size)
 {
